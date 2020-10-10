@@ -17,8 +17,7 @@ cpu = torch.device("cpu")
 
 x_bins = 40
 y_bins = 40
-#data_path = "/home/ubuntu/code/data/ModelNet10/ModelNet10/"
-data_path = 'C:/Users/hansr/OneDrive/Documents/Research/NeurIPS20/data/ModelNet10/ModelNet10/'
+data_path = './data/ModelNet10/ModelNet10/'
 
 #binary classificaiton
 categories = ['sofa','monitor']
@@ -27,8 +26,7 @@ n_classes = len(categories)
 feature_dim = (40,40)
 label_dict = {category:index for index,category in enumerate(categories) }
 reverse_label_dict = {index:category for index,category in enumerate(categories) }
-#path = '/home/ubuntu/code/invariants/'
-path = 'C:/Users/hansr/OneDrive/Documents/Research/NeurIPS20/code/invariants_binary/'
+path = './invariants_binary/'
 N = len(os.listdir(path))
 files = os.listdir(path)
 X = torch.zeros(N,n_features,x_bins,y_bins)
@@ -80,8 +78,6 @@ for trial in range(n_trials):
             _, predicted = torch.max(outputs,1)
             total+= labels.size(0)
             correct+= (predicted == labels).sum().item()
-            # print('running accuracy: ' + str(correct/total))
-            # print('\n')
         train_accuracy[epoch,trial]=correct/total
         #model_file = './training/trial_'+str(trial) + '_epoch_'+str(epoch)+'.pth'
         #torch.save(model.state_dict(), model_file)
