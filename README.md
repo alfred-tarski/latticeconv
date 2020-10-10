@@ -3,4 +3,9 @@
 
 ### Packages to install:
 
-*RIVET https://github.com/rivetTDA/rivet
+* RIVET https://github.com/rivetTDA/rivet
+* Pytorch with CUDA compatibility
+
+### Data
+
+* ModelNET10 http://3dshapenets.cs.princeton.edu/
