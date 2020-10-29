@@ -12,12 +12,13 @@ import time
 from matplotlib.pyplot import figure,xlabel,ylabel,plot,savefig,legend,title
 import pickle
 
+torch.manual_seed(42)
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 cpu = torch.device("cpu")
 
 x_bins = 40
 y_bins = 40
-data_path = './data/ModelNet10/ModelNet10/'
 
 #binary classificaiton
 categories = ['sofa','monitor']
@@ -26,7 +27,7 @@ n_classes = len(categories)
 feature_dim = (40,40)
 label_dict = {category:index for index,category in enumerate(categories) }
 reverse_label_dict = {index:category for index,category in enumerate(categories) }
-path = './invariants_binary/'
+path = './invariants/'
 N = len(os.listdir(path))
 files = os.listdir(path)
 X = torch.zeros(N,n_features,x_bins,y_bins)
@@ -40,18 +41,17 @@ Y = Y.type(torch.LongTensor)
 print('data has shape: '+ str(X.shape))
 print('labels has shape: ' + str(Y.shape))
 
-data = [[X[index,:,:,:],Y[index]] for index in range(X.shape[0])]
-training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10])
-trainloader = DataLoader(training_data,batch_size=16,shuffle=True,pin_memory=True)
-testloader = DataLoader(testing_data,batch_size=1,shuffle=True,pin_memory=True)
-
 #binary classification sofa vs. monitor
-n_trials = 5
+n_trials = 10
 n_epochs = 50
 train_accuracy = torch.zeros(n_epochs,n_trials)
 test_accuracy = torch.zeros(n_epochs,n_trials)
 #ConvClassifier
 for trial in range(n_trials):
+    data = [[X[index,:,:,:],Y[index]] for index in range(X.shape[0])]
+    training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10])
+    trainloader = DataLoader(training_data,batch_size=16,shuffle=True,pin_memory=True)
+    testloader = DataLoader(testing_data,batch_size=1,shuffle=False,pin_memory=True)
     print('New trial...')
     start_time = time.time()
     model = ConvClassifier(feature_dim,n_features,n_classes)
@@ -70,11 +70,7 @@ for trial in range(n_trials):
             outputs = model(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
-            optimizer.step()
-            # print statistics
-            a_loss = loss.item()
-            print('[%d, %d, %5d] loss: %.3f' %
-                    (trial + 1,epoch + 1, i + 1, a_loss))
+            optimizer.step()            
             _, predicted = torch.max(outputs,1)
             total+= labels.size(0)
             correct+= (predicted == labels).sum().item()
