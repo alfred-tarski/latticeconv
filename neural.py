@@ -100,6 +100,8 @@ class LatticeCNN(nn.Module):
     for i in range(len(n_features)-1):
       self.meet_conv.append(MeetConv2d(signal_dim,kernel_dim,(signal_dim[0]-kernel_dim[0],signal_dim[1]-kernel_dim[1]),n_features[i],n_features[i+1]).cuda())
       self.join_conv.append(JoinConv2d(signal_dim,kernel_dim,(0,0),n_features[i],n_features[i+1]).cuda())
+    self.meet_conv = nn.ModuleList(self.meet_conv)
+    self.join_conv = nn.ModuleList(self.join_conv)
 
   def forward(self,x):
     for (mc,jc) in zip(self.meet_conv,self.join_conv):
@@ -126,7 +128,7 @@ class LatticeClassifier(nn.Module):
 class ConvClassifier(nn.Module):
   def __init__(self,signal_dim,n_features,n_classes):
     super(ConvClassifier,self).__init__()
-    self.convolutions = [nn.Conv2d(n_features,16,(4,4),1),nn.Conv2d(16,16,(4,4),1),nn.Conv2d(16,8,(4,4),1)]
+    self.convolutions = nn.ModuleList([nn.Conv2d(n_features,16,(4,4),1),nn.Conv2d(16,16,(4,4),1),nn.Conv2d(16,8,(4,4),1)])
     self.fc1 = nn.Linear(8*(signal_dim[0]-9)*(signal_dim[1]-9),32)
     self.fc2 = nn.Linear(32,32)
     self.fc3 = nn.Linear(32,n_classes)
@@ -134,6 +136,20 @@ class ConvClassifier(nn.Module):
     batch_size = x.shape[0]
     for c in self.convolutions:
       x = F.relu(c(x))
+    x = F.relu(self.fc1(torch.reshape(x,(batch_size,-1))))
+    x = F.relu(self.fc2(x))
+    x = self.fc3(x)
+    return x
+
+class MLPClassifier(nn.Module):
+  def __init__(self,signal_dim,n_features,n_classes):
+    super(MLPClassifier,self).__init__()
+    self.fc1 = nn.Linear(n_features*(signal_dim[0])*(signal_dim[1]),32)
+    self.fc2 = nn.Linear(32,32)
+    self.fc3 = nn.Linear(32,n_classes)
+  def forward(self,x):
+    batch_size = x.shape[0]
+
     x = F.relu(self.fc1(torch.reshape(x,(batch_size,-1))))
     x = F.relu(self.fc2(x))
     x = self.fc3(x)
