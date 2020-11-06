@@ -12,7 +12,7 @@ import time
 from matplotlib.pyplot import figure,xlabel,ylabel,plot,savefig,legend,title
 import pickle
 
-torch.manual_seed(42)
+#torch.manual_seed(11)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 cpu = torch.device("cpu")
@@ -42,24 +42,26 @@ print('data has shape: '+ str(X.shape))
 print('labels has shape: ' + str(Y.shape))
 
 #binary classification sofa vs. monitor
-n_trials = 10
-n_epochs = 50
+n_trials = 20
+n_epochs = 100
+p_drop = 0.5
 train_accuracy = torch.zeros(n_epochs,n_trials)
 test_accuracy = torch.zeros(n_epochs,n_trials)
 #ConvClassifier
 for trial in range(n_trials):
     data = [[X[index,:,:,:],Y[index]] for index in range(X.shape[0])]
-    training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10])
+    training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10],generator=torch.Generator().manual_seed(42))
     trainloader = DataLoader(training_data,batch_size=16,shuffle=True,pin_memory=True)
     testloader = DataLoader(testing_data,batch_size=1,shuffle=False,pin_memory=True)
     print('New trial...')
-    start_time = time.time()
-    model = ConvClassifier(feature_dim,n_features,n_classes)
+    model = ConvClassifier(feature_dim,n_features,n_classes,p_drop)
     model = model.to(device)
     model.cuda()
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(),lr=0.0001)
+    optimizer = optim.Adam(model.parameters(),lr=5e-4)
     for epoch in range(n_epochs): 
+        start_time = time.time()
+        print('Trial: '+str(trial+1))
         print('Epoch: '+str(epoch+1))
         total = 0.0
         correct = 0
@@ -75,8 +77,6 @@ for trial in range(n_trials):
             total+= labels.size(0)
             correct+= (predicted == labels).sum().item()
         train_accuracy[epoch,trial]=correct/total
-        #model_file = './training/trial_'+str(trial) + '_epoch_'+str(epoch)+'.pth'
-        #torch.save(model.state_dict(), model_file)
         print("Training took %.d seconds" % (time.time() - start_time))
         print('Testing accuracy of ConvClassifier...')
         total = 0.0

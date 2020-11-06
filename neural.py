@@ -93,7 +93,7 @@ class JoinConv2d(nn.Module):
     return 'join convolution layer with input_features={}, output_features={}, kernel_size={}'.format(in_features, out_features, (kernel_x,kernel_y))
 
 class LatticeCNN(nn.Module):
-  def __init__(self,signal_dim,kernel_dim,n_features):
+  def __init__(self,signal_dim,kernel_dim,n_features,alpha=0.5):
     super(LatticeCNN,self).__init__()
     self.meet_conv = []
     self.join_conv = []
@@ -103,54 +103,58 @@ class LatticeCNN(nn.Module):
     self.meet_conv = nn.ModuleList(self.meet_conv)
     self.join_conv = nn.ModuleList(self.join_conv)
 
-  def forward(self,x):
+  def forward(self,x,alpha=0.5):
     for (mc,jc) in zip(self.meet_conv,self.join_conv):
-      x = F.relu(mc(x) + jc(x))
+      x = F.relu((1-alpha)*mc(x) + alpha*jc(x))
     return x
 
 class LatticeClassifier(nn.Module):
-  def __init__(self,signal_dim,n_features,n_classes):
+  def __init__(self,signal_dim,n_features,n_classes,alpha=0.5,p_drop=0.0):
     super(LatticeClassifier,self).__init__()
-    self.convolutions = LatticeCNN(signal_dim,(4,4),[n_features,16,16,8])
+    self.convolutions = LatticeCNN(signal_dim,(4,4),[n_features,16,16,8],alpha)
     self.convolutions.cuda()
     self.fc1 = nn.Linear(8*signal_dim[0]*signal_dim[1],32)
     self.fc2 = nn.Linear(32,32)
     self.fc3 = nn.Linear(32,n_classes)
+    self.drop1 = nn.Dropout(p_drop)
+    self.drop2 = nn.Dropout(p_drop)
 
   def forward(self,x):
     batch_size = x.shape[0]
     x = self.convolutions(x)
-    x = F.relu(self.fc1(torch.reshape(x,(batch_size,-1))))
-    x = F.relu(self.fc2(x))
+    x = F.relu(self.drop1(self.fc1(torch.reshape(x,(batch_size,-1))))) #get rid of middle fc layer
+    # x = F.relu(self.drop2(self.fc2(x)))
     x = self.fc3(x)
     return x
 
 class ConvClassifier(nn.Module):
-  def __init__(self,signal_dim,n_features,n_classes):
+  def __init__(self,signal_dim,n_features,n_classes, p_drop=0.0):
     super(ConvClassifier,self).__init__()
     self.convolutions = nn.ModuleList([nn.Conv2d(n_features,16,(4,4),1),nn.Conv2d(16,16,(4,4),1),nn.Conv2d(16,8,(4,4),1)])
     self.fc1 = nn.Linear(8*(signal_dim[0]-9)*(signal_dim[1]-9),32)
     self.fc2 = nn.Linear(32,32)
     self.fc3 = nn.Linear(32,n_classes)
+    self.drop1 = nn.Dropout(p_drop)
+    self.drop2 = nn.Dropout(p_drop)
   def forward(self,x):
     batch_size = x.shape[0]
     for c in self.convolutions:
       x = F.relu(c(x))
-    x = F.relu(self.fc1(torch.reshape(x,(batch_size,-1))))
-    x = F.relu(self.fc2(x))
+    x = F.relu(self.drop1(self.fc1(torch.reshape(x,(batch_size,-1)))))
+    # x = F.relu(self.drop2(self.fc2(x)))
     x = self.fc3(x)
     return x
 
-class MLPClassifier(nn.Module):
-  def __init__(self,signal_dim,n_features,n_classes):
-    super(MLPClassifier,self).__init__()
-    self.fc1 = nn.Linear(n_features*(signal_dim[0])*(signal_dim[1]),32)
-    self.fc2 = nn.Linear(32,32)
-    self.fc3 = nn.Linear(32,n_classes)
-  def forward(self,x):
-    batch_size = x.shape[0]
+# class MLPClassifier(nn.Module):
+#   def __init__(self,signal_dim,n_features,n_classes):
+#     super(MLPClassifier,self).__init__()
+#     self.fc1 = nn.Linear(n_features*(signal_dim[0])*(signal_dim[1]),32)
+#     self.fc2 = nn.Linear(32,32)
+#     self.fc3 = nn.Linear(32,n_classes)
+#   def forward(self,x):
+#     batch_size = x.shape[0]
 
-    x = F.relu(self.fc1(torch.reshape(x,(batch_size,-1))))
-    x = F.relu(self.fc2(x))
-    x = self.fc3(x)
-    return x
+#     x = F.relu(self.fc1(torch.reshape(x,(batch_size,-1))))
+#     x = F.relu(self.fc2(x))
+#     x = self.fc3(x)
+#     return x

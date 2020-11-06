@@ -12,7 +12,7 @@ import time
 from matplotlib.pyplot import figure,xlabel,ylabel,plot,savefig,legend,title
 import pickle
 
-torch.manual_seed(42)
+#torch.manual_seed(11)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 cpu = torch.device("cpu")
@@ -42,24 +42,27 @@ print('data has shape: '+ str(X.shape))
 print('labels has shape: ' + str(Y.shape))
 
 #binary classification sofa vs. monitor
-n_trials = 10
-n_epochs = 50
+n_trials = 20
+n_epochs = 100
+alpha = 0.5
+p_drop = 0.5
 train_accuracy = torch.zeros(n_epochs,n_trials)
 test_accuracy = torch.zeros(n_epochs,n_trials)
 #LatticeClassifier
 for trial in range(n_trials):
     data = [[X[index,:,:,:],Y[index]] for index in range(X.shape[0])]
-    training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10])
+    training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10],generator=torch.Generator().manual_seed(42))
     trainloader = DataLoader(training_data,batch_size=16,shuffle=True,pin_memory=True)
     testloader = DataLoader(testing_data,batch_size=1,shuffle=True,pin_memory=True)
     print('New trial...')
-    start_time = time.time()
-    model = LatticeClassifier(feature_dim,n_features,n_classes)
+    model = LatticeClassifier(feature_dim,n_features,n_classes,alpha,p_drop)
     model = model.to(device)
     model.cuda()
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(),lr=0.0001)
+    optimizer = optim.Adam(model.parameters(),lr=5e-4)
     for epoch in range(n_epochs): 
+        start_time = time.time()
+        print('Trial: '+str(trial+1))
         print('Epoch: '+str(epoch+1))
         total = 0.0
         correct = 0
@@ -71,15 +74,9 @@ for trial in range(n_trials):
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-            # print statistics
-            # a_loss = loss.item()
-            # print('[%d, %d, %5d] loss: %.3f' %
-            #         (trial + 1,epoch + 1, i + 1, a_loss))
             _, predicted = torch.max(outputs,1)
             total+= labels.size(0)
             correct+= (predicted == labels).sum().item()
-            # print('running accuracy: ' + str(correct/total))
-            # print('\n')
         train_accuracy[epoch,trial]=correct/total
         print("Training took %.d seconds" % (time.time() - start_time))
         print('Testing accuracy of LatticeClassifier...')
