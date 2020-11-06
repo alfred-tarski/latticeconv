@@ -20,6 +20,7 @@ cpu = torch.device("cpu")
 x_bins = 40
 y_bins = 40
 
+print("Loading dataset...")
 #binary classificaiton
 categories = ['sofa','monitor']
 n_features = 4
@@ -45,24 +46,25 @@ print('labels has shape: ' + str(Y.shape))
 n_trials = 20
 n_epochs = 100
 p_drop = 0.5
+learning_rate = 5e-4
 train_accuracy = torch.zeros(n_epochs,n_trials)
 test_accuracy = torch.zeros(n_epochs,n_trials)
 #ConvClassifier
 for trial in range(n_trials):
+    trial_start = time.time()
     data = [[X[index,:,:,:],Y[index]] for index in range(X.shape[0])]
     training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10],generator=torch.Generator().manual_seed(42))
     trainloader = DataLoader(training_data,batch_size=16,shuffle=True,pin_memory=True)
-    testloader = DataLoader(testing_data,batch_size=1,shuffle=False,pin_memory=True)
+    testloader = DataLoader(testing_data,batch_size=16,shuffle=False,pin_memory=True)
     print('New trial...')
     model = ConvClassifier(feature_dim,n_features,n_classes,p_drop)
     model = model.to(device)
     model.cuda()
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(),lr=5e-4)
+    optimizer = optim.Adam(model.parameters(),lr=learning_rate)
     for epoch in range(n_epochs): 
         start_time = time.time()
-        print('Trial: '+str(trial+1))
-        print('Epoch: '+str(epoch+1))
+        print("Trial: {:d} \t Epoch: {:d}".format(trial+1,epoch+1))
         total = 0.0
         correct = 0
         for i, data in enumerate(trainloader):
@@ -77,8 +79,8 @@ for trial in range(n_trials):
             total+= labels.size(0)
             correct+= (predicted == labels).sum().item()
         train_accuracy[epoch,trial]=correct/total
-        print("Training took %.d seconds" % (time.time() - start_time))
-        print('Testing accuracy of ConvClassifier...')
+        print("Training took {:.1f} seconds".format(time.time() - start_time))
+        print("Training accuracy: {:.1%}".format(train_accuracy[epoch,trial]))
         total = 0.0
         correct = 0
         with torch.no_grad():
@@ -89,5 +91,7 @@ for trial in range(n_trials):
                 total+= labels.size(0)
                 correct+= (predicted == labels).sum().item()
         test_accuracy[epoch,trial] = correct/total
+        print("Testing accuracy: {:.1%}".format(test_accuracy[epoch,trial]))
+    print("Trial took {:.1f} seconds".format(time.time() - trial_start))
 torch.save(train_accuracy,'./conv_train_accuracy.pt')
 torch.save(test_accuracy,'./conv_test_accuracy.pt')
