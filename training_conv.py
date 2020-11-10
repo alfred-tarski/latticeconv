@@ -21,41 +21,24 @@ cpu = torch.device("cpu")
 x_bins = 40
 y_bins = 40
 
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-=======
 print("Loading dataset...")
->>>>>>> 396f42c4ef1b91e1dc7e00caacad96a1cc716e44
-#binary classificaiton
-=======
-print("Loading dataset...")
-#binary classification
->>>>>>> Stashed changes
-categories = ['sofa','monitor']
+categories = ['bathtub','bed','chair','desk','dresser','monitor','night','sofa','table','toilet']
 n_features = 4
 n_classes = len(categories)
 feature_dim = (40,40)
 label_dict = {category:index for index,category in enumerate(categories) }
 reverse_label_dict = {index:category for index,category in enumerate(categories) }
-path = './invariants/'
-N = len(os.listdir(path))
-files = os.listdir(path)
-X = torch.zeros(N,n_features,x_bins,y_bins)
-Y = torch.zeros(N)
-for index,file_name in enumerate(files):
-    X[index,:,:,:] = parse_rivet_output(path+file_name,x_bins,y_bins)
-    v = label_dict[file_name.split('_')[1]]
-    Y[index] = v
-Y = Y.type(torch.LongTensor)
+X = torch.load('./rivet_features.pt')
+Y = torch.load('./rivet_classes.pt')
 
 print('data has shape: '+ str(X.shape))
 print('labels has shape: ' + str(Y.shape))
 
 #binary classification sofa vs. monitor
 n_trials = 10
-n_epochs = 50
+n_epochs = 150
 p_drop = 0.5
-learning_rate = 5e-4
+learning_rate = 2.5e-4
 train_accuracy = torch.zeros(n_epochs,n_trials)
 test_accuracy = torch.zeros(n_epochs,n_trials)
 #ConvClassifier
@@ -63,8 +46,8 @@ for trial in range(n_trials):
     trial_start = time.time()
     data = [[X[index,:,:,:],Y[index]] for index in range(X.shape[0])]
     training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10],generator=torch.Generator().manual_seed(42+trial))
-    trainloader = DataLoader(training_data,batch_size=16,shuffle=True,pin_memory=True)
-    testloader = DataLoader(testing_data,batch_size=16,shuffle=False,pin_memory=True)
+    trainloader = DataLoader(training_data,batch_size=128,shuffle=True,pin_memory=True)
+    testloader = DataLoader(testing_data,batch_size=128,shuffle=False,pin_memory=True)
     print("Trial {:d}".format(trial+1))
     model = ConvClassifier(feature_dim,n_features,n_classes,p_drop)
     model = model.to(device)
