@@ -6,6 +6,7 @@ import torch.functional as F
 import torch.optim as optim
 from rivet import parse_rivet_output
 from neural import LatticeClassifier,ConvClassifier
+from train import *
 from numpy.random import permutation
 from torch.utils.data import DataLoader,random_split
 import time
@@ -42,53 +43,30 @@ print('data has shape: '+ str(X.shape))
 print('labels has shape: ' + str(Y.shape))
 
 #binary classification sofa vs. monitor
-n_trials = 20
-n_epochs = 100
+n_trials = 10
+n_epochs = 50
 alpha = 0.5
 p_drop = 0.5
 train_accuracy = torch.zeros(n_epochs,n_trials)
 test_accuracy = torch.zeros(n_epochs,n_trials)
+train_loss = torch.zeros(n_epochs,n_trials)
 #LatticeClassifier
 for trial in range(n_trials):
     data = [[X[index,:,:,:],Y[index]] for index in range(X.shape[0])]
-    training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10],generator=torch.Generator().manual_seed(42))
+    training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10],generator=torch.Generator().manual_seed(42+trial))
     trainloader = DataLoader(training_data,batch_size=16,shuffle=True,pin_memory=True)
-    testloader = DataLoader(testing_data,batch_size=1,shuffle=True,pin_memory=True)
-    print('New trial...')
+    testloader = DataLoader(testing_data,batch_size=16,shuffle=False,pin_memory=True)
+    print("Trial {:d}".format(trial+1))
     model = LatticeClassifier(feature_dim,n_features,n_classes,alpha,p_drop)
     model = model.to(device)
     model.cuda()
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(),lr=5e-4)
-    for epoch in range(n_epochs): 
-        start_time = time.time()
-        print('Trial: '+str(trial+1))
-        print('Epoch: '+str(epoch+1))
-        total = 0.0
-        correct = 0
-        for i, data in enumerate(trainloader):
-            inputs, labels = data[0].to(device), data[1].to(device)
-            optimizer.zero_grad()
-            # forward + backward + optimize
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            _, predicted = torch.max(outputs,1)
-            total+= labels.size(0)
-            correct+= (predicted == labels).sum().item()
-        train_accuracy[epoch,trial]=correct/total
-        print("Training took %.d seconds" % (time.time() - start_time))
-        print('Testing accuracy of LatticeClassifier...')
-        total = 0.0
-        correct = 0
-        with torch.no_grad():
-            for i,data in enumerate(testloader):
-                inputs,labels = data[0].to(device),data[1].to(device)
-                outputs = model(inputs)
-                _, predicted = torch.max(outputs,1)
-                total+= labels.size(0)
-                correct+= (predicted == labels).sum().item()
-        test_accuracy[epoch,trial] = correct/total
+    optimizer = optim.Adam(model.parameters(),lr=learning_rate)
+    def callback(model,epoch):
+        torch.save(model.state_dict(),"./checkpoints/lattice_trial{:d}_epoch{:d}".format(trial+1,epoch+1))
+    train_accuracy[:,trial], test_accuracy[:,trial], train_loss[:,trial] = train(model, criterion, optimizer, trainloader, testloader, n_epochs, device, callback)
+    print("Trial took {:.1f} seconds".format(time.time() - trial_start))
 torch.save(train_accuracy,'./lattice_train_accuracy.pt')
 torch.save(test_accuracy,'./lattice_test_accuracy.pt')
+torch.save(train_loss,'./lattice_train_loss.pt')
+
