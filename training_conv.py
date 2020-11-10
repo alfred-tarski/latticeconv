@@ -21,7 +21,11 @@ cpu = torch.device("cpu")
 x_bins = 40
 y_bins = 40
 
+<<<<<<< HEAD
 <<<<<<< Updated upstream
+=======
+print("Loading dataset...")
+>>>>>>> 396f42c4ef1b91e1dc7e00caacad96a1cc716e44
 #binary classificaiton
 =======
 print("Loading dataset...")
@@ -51,10 +55,12 @@ print('labels has shape: ' + str(Y.shape))
 n_trials = 10
 n_epochs = 50
 p_drop = 0.5
+learning_rate = 5e-4
 train_accuracy = torch.zeros(n_epochs,n_trials)
 test_accuracy = torch.zeros(n_epochs,n_trials)
 #ConvClassifier
 for trial in range(n_trials):
+    trial_start = time.time()
     data = [[X[index,:,:,:],Y[index]] for index in range(X.shape[0])]
     training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10],generator=torch.Generator().manual_seed(42+trial))
     trainloader = DataLoader(training_data,batch_size=16,shuffle=True,pin_memory=True)

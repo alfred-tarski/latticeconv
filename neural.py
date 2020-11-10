@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn 
 import torch.nn.functional as F
 import torch.optim as optim
+import opt_einsum as oe
 
 def build_meet_convolve_tensor(signal_dim,kernel_dim,kernel_loc):
   # produces a tensor M_ijk such that the contraction M_ijk f_i is equal to f_{j ^ k}
@@ -29,7 +30,8 @@ def build_join_convolve_tensor(signal_dim,kernel_dim,kernel_loc):
 
 # to compute a convolution (f*g)_{xy}, we need to calculate the contraction M_{ixa} N_{jyb} f_{ij} g_{ab}
 def lattice_convolution_2d(convolve_x,convolve_y,signal,kernel):
-  return torch.einsum("ixa,jyb,ij,ab->xy",convolve_x,convolve_y,signal,kernel)
+  return oe.contract("ixa,jyb,ij,ab->xy",convolve_x,convolve_y,signal,kernel)
+  #return torch.einsum("ixa,jyb,ij,ab->xy",convolve_x,convolve_y,signal,kernel)
 
 class MeetConv2d(nn.Module):
   def __init__(self,signal_dim,kernel_dim,kernel_loc,in_features,out_features):
@@ -56,7 +58,8 @@ class MeetConv2d(nn.Module):
     # Similarly N_jyb X_mfij has spatial indices y, b, for X(-, y ^b).
     # So M_ixa N_jyb X_mfij represents X(x^a,y^b). Now we take the summation over a, b with the convolution kernel.
     # Finally, the summation over f takes the appropriate linear combination of all the convolutional kernels for this layer
-    Y = torch.einsum("ixa,jyb,mfij,abfg->mgxy",self.conv_x,self.conv_y,X,self.weights)
+    #Y = torch.einsum("ixa,jyb,mfij,abfg->mgxy",self.conv_x,self.conv_y,X,self.weights)
+    Y = oe.contract("ixa,jyb,mfij,abfg->mgxy",self.conv_x,self.conv_y,X,self.weights)
     # Y is now (batchsize,out_features,signal_x,signal_y)
     return Y + self.bias #this should broadcast over everything
   
@@ -84,7 +87,8 @@ class JoinConv2d(nn.Module):
     
   def forward(self, X):
     # X should be a (batchsize,in_features,signal_x,signal_y) tensor
-    Y = torch.einsum("ixa,jyb,mfij,abfg->mgxy",self.conv_x,self.conv_y,X,self.weights)
+    #Y = torch.einsum("ixa,jyb,mfij,abfg->mgxy",self.conv_x,self.conv_y,X,self.weights)
+    Y = oe.contract("ixa,jyb,mfij,abfg->mgxy",self.conv_x,self.conv_y,X,self.weights)
     # Y is now (batchsize,out_features,signal_x,signal_y)
     return Y + self.bias #this should broadcast over everything
   
