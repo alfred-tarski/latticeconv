@@ -48,15 +48,15 @@ class MeetConv2d(nn.Module):
     self.initialize_weights()
 
   def initialize_weights(self):
-    nn.init.xavier_normal_(self.weights,gain=nn.init.calculate_gain('relu'))
-    nn.init.normal_(self.bias)
+    nn.init.kaiming_normal_(self.weights)
+    nn.init.zeros_(self.bias)
     
   def forward(self, X):
     # X should be a (batchsize,in_features,signal_x,signal_y) tensor
-    # Ok, this is gnarly. the contraction is M_ixa N_jyb X_mijf W_abfg.
-    # M and N are the 1d shift tensors. So M_ixa X_mijf has spatial indices x, a, for X(x ^ a, - )
-    # Similarly N_jyb X_mijf has spatial indices y, b, for X(-, y ^b).
-    # So M_ixa N_yjb X_mijf represents X(x^a,y^b). Now we take the summation over a, b with the convolution kernel.
+    # Ok, this is gnarly. the contraction is M_ixa N_jyb X_mfij W_abfg.
+    # M and N are the 1d shift tensors. So M_ixa X_mfij has spatial indices x, a, for X(x ^ a, - )
+    # Similarly N_jyb X_mfij has spatial indices y, b, for X(-, y ^b).
+    # So M_ixa N_jyb X_mfij represents X(x^a,y^b). Now we take the summation over a, b with the convolution kernel.
     # Finally, the summation over f takes the appropriate linear combination of all the convolutional kernels for this layer
     #Y = torch.einsum("ixa,jyb,mfij,abfg->mgxy",self.conv_x,self.conv_y,X,self.weights)
     Y = oe.contract("ixa,jyb,mfij,abfg->mgxy",self.conv_x,self.conv_y,X,self.weights)
@@ -82,8 +82,8 @@ class JoinConv2d(nn.Module):
     self.initialize_weights()
 
   def initialize_weights(self):
-    nn.init.xavier_normal_(self.weights,gain=nn.init.calculate_gain('relu'))
-    nn.init.normal_(self.bias)
+    nn.init.kaiming_normal_(self.weights)
+    nn.init.zeros_(self.bias)
     
   def forward(self, X):
     # X should be a (batchsize,in_features,signal_x,signal_y) tensor
@@ -109,7 +109,7 @@ class LatticeCNN(nn.Module):
 
   def forward(self,x,alpha=0.5):
     for (mc,jc) in zip(self.meet_conv,self.join_conv):
-      x = F.relu((1-alpha)*mc(x) + alpha*jc(x))
+      x = F.leaky_relu((1-alpha)*mc(x) + alpha*jc(x))
     return x
 
 class LatticeClassifier(nn.Module):
@@ -134,7 +134,7 @@ class LatticeClassifier(nn.Module):
 class ConvClassifier(nn.Module):
   def __init__(self,signal_dim,n_features,n_classes, p_drop=0.0):
     super(ConvClassifier,self).__init__()
-    self.convolutions = nn.ModuleList([nn.Conv2d(n_features,16,(4,4),1),nn.Conv2d(16,16,(4,4),1),nn.Conv2d(16,8,(4,4),1)])
+    self.convolutions = nn.ModuleList([nn.Conv2d(n_features,8,(4,4),1),nn.Conv2d(8,8,(4,4),1),nn.Conv2d(8,8,(4,4),1)])
     self.fc1 = nn.Linear(8*(signal_dim[0]-9)*(signal_dim[1]-9),32)
     self.fc2 = nn.Linear(32,32)
     self.fc3 = nn.Linear(32,n_classes)
@@ -143,7 +143,7 @@ class ConvClassifier(nn.Module):
   def forward(self,x):
     batch_size = x.shape[0]
     for c in self.convolutions:
-      x = F.relu(c(x))
+      x = F.leaky_relu(c(x))
     x = F.relu(self.drop1(self.fc1(torch.reshape(x,(batch_size,-1)))))
     # x = F.relu(self.drop2(self.fc2(x)))
     x = self.fc3(x)
