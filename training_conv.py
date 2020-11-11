@@ -34,7 +34,6 @@ Y = torch.load('./rivet_classes.pt')
 print('data has shape: '+ str(X.shape))
 print('labels has shape: ' + str(Y.shape))
 
-#binary classification sofa vs. monitor
 n_trials = 10
 n_epochs = 150
 p_drop = 0.5
@@ -45,7 +44,10 @@ test_accuracy = torch.zeros(n_epochs,n_trials)
 for trial in range(n_trials):
     trial_start = time.time()
     data = [[X[index,:,:,:],Y[index]] for index in range(X.shape[0])]
-    training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10],generator=torch.Generator().manual_seed(42+trial))
+    n_train = 7*len(data)//10
+    n_test = 2*len(data)//10
+    n_validate = len(data)-n_train-n_test
+    training_data,testing_data,validation_data = random_split(data,[n_train,n_test,n_validate],generator=torch.Generator().manual_seed(42+trial))
     trainloader = DataLoader(training_data,batch_size=128,shuffle=True,pin_memory=True)
     testloader = DataLoader(testing_data,batch_size=128,shuffle=False,pin_memory=True)
     print("Trial {:d}".format(trial+1))
@@ -56,7 +58,8 @@ for trial in range(n_trials):
     optimizer = optim.Adam(model.parameters(),lr=learning_rate)
     def callback(model,epoch):
         torch.save(model.state_dict(),"./checkpoints/lattice_trial{:d}_epoch{:d}".format(trial+1,epoch+1))
-    train_accuracy[:,trial], test_accuracy[:,trial], _ = train(model, criterion, optimizer, trainloader, testloader, n_epochs, device, callback)
+    train_accuracy[:,trial], test_accuracy[:,trial], train_loss[:,trail] = train(model, criterion, optimizer, trainloader, testloader, n_epochs, device, callback)
     print("Trial took {:.1f} seconds".format(time.time() - trial_start))
 torch.save(train_accuracy,'./conv_train_accuracy.pt')
 torch.save(test_accuracy,'./conv_test_accuracy.pt')
+torch.save(train_loss,'./conv_train_loss.pt')
