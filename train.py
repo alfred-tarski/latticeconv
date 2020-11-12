@@ -55,7 +55,7 @@ def train(model, criterion, optimizer, train_data, test_data, validation_data, n
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
         test_accuracy[epoch] = correct/total
-        if(epoch % 10 == 9):
+        if(epoch % 5 == 4):
             print("Epoch {:d}".format(epoch+1))
             print("Training accuracy: {:.1%}".format(train_accuracy[epoch]))
             print("Testing accuracy: {:.1%}".format(test_accuracy[epoch]))
