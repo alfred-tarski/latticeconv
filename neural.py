@@ -110,14 +110,37 @@ class LatticeCNN(nn.Module):
   def forward(self,x,alpha=0.5):
     for (mc,jc) in zip(self.meet_conv,self.join_conv):
       x = F.leaky_relu((1-alpha)*mc(x) + alpha*jc(x))
+      #x = F.max_pool2d(x,(2,2))
     return x
+
+class LatticeCNNPool(nn.Module):
+  def __init__(self,signal_dim,kernel_dim,n_features,pool_sizes,alpha=0.5):
+    super(LatticeCNNPool,self).__init__()
+    self.meet_conv = []
+    self.join_conv = []
+    dims = signal_dim
+    self.pool_sizes = pool_sizes
+    for i in range(len(n_features)-1):
+      self.meet_conv.append(MeetConv2d(dims,kernel_dim,(dims[0]-kernel_dim[0],dims[1]-kernel_dim[1]),n_features[i],n_features[i+1]//2))
+      self.join_conv.append(JoinConv2d(dims,kernel_dim,(0,0),n_features[i],n_features[i+1]//2))
+      dims = (dims[0]//pool_sizes[i][0],dims[1]//pool_sizes[i][1])
+    self.meet_conv = nn.ModuleList(self.meet_conv)
+    self.join_conv = nn.ModuleList(self.join_conv)
+
+  def forward(self,x,alpha=0.5):
+    for (mc,jc,pool) in zip(self.meet_conv,self.join_conv,self.pool_sizes):
+      #x = F.leaky_relu((1-alpha)*mc(x) + alpha*jc(x))
+      x = F.leaky_relu(torch.cat((mc(x),jc(x)),dim=1))
+      x = F.max_pool2d(x,pool)
+    return x
+
 
 class LatticeClassifier(nn.Module):
   def __init__(self,signal_dim,n_features,n_classes,alpha=0.5,p_drop=0.0):
     super(LatticeClassifier,self).__init__()
-    self.convolutions = LatticeCNN(signal_dim,(4,4),[n_features,16,16,8],alpha)
+    self.convolutions = LatticeCNNPool(signal_dim,(4,4),[n_features,16,16,8],[(2,2),(2,2),(1,1)],alpha)
     self.convolutions.cuda()
-    self.fc1 = nn.Linear(8*signal_dim[0]*signal_dim[1],32)
+    self.fc1 = nn.Linear(8*(signal_dim[0]//4)*(signal_dim[1]//4),32)
     self.fc2 = nn.Linear(32,32)
     self.fc3 = nn.Linear(32,n_classes)
     self.drop1 = nn.Dropout(p_drop)
@@ -127,26 +150,36 @@ class LatticeClassifier(nn.Module):
     batch_size = x.shape[0]
     x = self.convolutions(x)
     x = F.relu(self.drop1(self.fc1(torch.reshape(x,(batch_size,-1))))) #get rid of middle fc layer
-    # x = F.relu(self.drop2(self.fc2(x)))
+    #x = self.fc1(torch.reshape(x,(batch_size, -1)))
+    x = F.relu(self.drop2(self.fc2(x)))
     x = self.fc3(x)
+    #x = torch.sum(x,dim=(2,3)) #dumbest possible classifier
     return x
 
 class ConvClassifier(nn.Module):
-  def __init__(self,signal_dim,n_features,n_classes, p_drop=0.0):
+  def __init__(self,signal_dim,n_features,n_classes, alpha=0.0, p_drop=0.0):
     super(ConvClassifier,self).__init__()
-    self.convolutions = nn.ModuleList([nn.Conv2d(n_features,8,(4,4),1),nn.Conv2d(8,8,(4,4),1),nn.Conv2d(8,8,(4,4),1)])
-    self.fc1 = nn.Linear(8*(signal_dim[0]-9)*(signal_dim[1]-9),32)
+    self.convolutions = nn.ModuleList([nn.Conv2d(n_features,16,(4,4),1,padding=2),nn.Conv2d(16,16,(4,4),1,padding=2),nn.Conv2d(16,16,(4,4),1,padding=2)])
+    self.fc1 = nn.Linear(16*(signal_dim[0])*(signal_dim[1]),32)
     self.fc2 = nn.Linear(32,32)
     self.fc3 = nn.Linear(32,n_classes)
     self.drop1 = nn.Dropout(p_drop)
     self.drop2 = nn.Dropout(p_drop)
   def forward(self,x):
     batch_size = x.shape[0]
-    for c in self.convolutions:
-      x = F.leaky_relu(c(x))
+    #for c in self.convolutions:
+    #  x = F.leaky_relu(c(x))
+    x = F.leaky_relu(self.convolutions[0](x)[:,:,0:40,0:40])
+    x = F.max_pool2d(x,(2,2))
+    x = F.leaky_relu(self.convolutions[1](x)[:,:,0:40,0:40])
+    x = F.max_pool2d(x,(2,2))
+    x = F.leaky_relu(self.convolutions[2](x)[:,:,0:40,0:40])
+    #x = F.max_pool2d(x,(2,2))
     x = F.relu(self.drop1(self.fc1(torch.reshape(x,(batch_size,-1)))))
-    # x = F.relu(self.drop2(self.fc2(x)))
+    #x = self.fc1(torch.reshape(x,(batch_size, -1)))
+    x = F.relu(self.drop2(self.fc2(x)))
     x = self.fc3(x)
+    #x = torch.sum(x,dim=(2,3)) #use the dumbest possible classifier
     return x
 
 # class MLPClassifier(nn.Module):
@@ -162,3 +195,32 @@ class ConvClassifier(nn.Module):
 #     x = F.relu(self.fc2(x))
 #     x = self.fc3(x)
 #     return x
+
+class HybridClassifier(nn.Module):
+  def __init__(self,signal_dim,n_features,n_classes,alpha=0.5,p_drop=0.0):
+    super(HybridClassifier,self).__init__()
+    self.lattice_convolutions = LatticeCNNPool(signal_dim,(4,4),[n_features,8,8,8],[(2,2),(2,2),(2,2)],alpha)
+    self.convolutions = nn.ModuleList([nn.Conv2d(n_features,8,(4,4),1,padding=2),nn.Conv2d(8,8,(4,4),1,padding=2),nn.Conv2d(8,8,(4,4),1,padding=2)])
+    self.convolutions.cuda()
+    self.fc1 = nn.Linear(16*(signal_dim[0]//8)*(signal_dim[1]//8),32)
+    self.fc2 = nn.Linear(32,32)
+    self.fc3 = nn.Linear(32,n_classes)
+    self.drop1 = nn.Dropout(p_drop)
+    self.drop2 = nn.Dropout(p_drop)
+
+  def forward(self,x):
+    batch_size = x.shape[0]
+    x1 = self.lattice_convolutions(x)
+    x2 = F.leaky_relu(self.convolutions[0](x)[:,:,0:40,0:40])
+    x2 = F.max_pool2d(x2,(2,2))
+    x2 = F.leaky_relu(self.convolutions[1](x2)[:,:,0:20,0:20])
+    x2 = F.max_pool2d(x2,(2,2))
+    x2 = F.leaky_relu(self.convolutions[2](x2)[:,:,0:10,0:10])
+    x2 = F.max_pool2d(x2,(2,2))
+    x = torch.cat((x1,x2),dim=1)
+    x = F.relu(self.drop1(self.fc1(torch.reshape(x,(batch_size,-1))))) #get rid of middle fc layer
+    #x = self.fc1(torch.reshape(x,(batch_size, -1)))
+    x = F.relu(self.drop2(self.fc2(x)))
+    x = self.fc3(x)
+    #x = torch.sum(x,dim=(2,3)) #dumbest possible classifier
+    return x

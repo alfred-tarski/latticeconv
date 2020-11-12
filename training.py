@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.functional as F
 import torch.optim as optim
 from rivet import parse_rivet_output
-from neural import LatticeClassifier,ConvClassifier
+from neural import LatticeClassifier,ConvClassifier, HybridClassifier
 from train import *
 from numpy.random import permutation
 from torch.utils.data import DataLoader,random_split
@@ -35,11 +35,11 @@ print('data has shape: '+ str(X.shape))
 print('labels has shape: ' + str(Y.shape))
 
 #binary classification sofa vs. monitor
-n_trials = 10
-n_epochs = 150
+n_trials = 5
+n_epochs = 200
 alpha = 0.5
 p_drop = 0.5
-learning_rate = 2.5e-4
+learning_rate = 10e-4
 train_accuracy = torch.zeros(n_epochs,n_trials)
 test_accuracy = torch.zeros(n_epochs,n_trials)
 train_loss = torch.zeros(n_epochs,n_trials)
@@ -51,7 +51,7 @@ for trial in range(n_trials):
     trainloader = DataLoader(training_data,batch_size=128,shuffle=True,pin_memory=True)
     testloader = DataLoader(testing_data,batch_size=128,shuffle=False,pin_memory=True)
     print("Trial {:d}".format(trial+1))
-    model = LatticeClassifier(feature_dim,n_features,n_classes,alpha,p_drop)
+    model = HybridClassifier(feature_dim,n_features,n_classes,alpha=alpha,p_drop=p_drop)
     model = model.to(device)
     model.cuda()
     criterion = nn.CrossEntropyLoss()
@@ -60,7 +60,7 @@ for trial in range(n_trials):
         torch.save(model.state_dict(),"./checkpoints/lattice_trial{:d}_epoch{:d}".format(trial+1,epoch+1))
     train_accuracy[:,trial], test_accuracy[:,trial], train_loss[:,trial] = train(model, criterion, optimizer, trainloader, testloader, n_epochs, device, callback)
     print("Trial took {:.1f} seconds".format(time.time() - trial_start))
-torch.save(train_accuracy,'./lattice_train_accuracy.pt')
-torch.save(test_accuracy,'./lattice_test_accuracy.pt')
-torch.save(train_loss,'./lattice_train_loss.pt')
+torch.save(train_accuracy,'./hybrid_train_accuracy.pt')
+torch.save(test_accuracy,'./hybrid_test_accuracy.pt')
+torch.save(train_loss,'./hybrid_train_loss.pt')
 
