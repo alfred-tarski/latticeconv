@@ -52,16 +52,8 @@ class MeetConv2d(nn.Module):
     nn.init.zeros_(self.bias)
     
   def forward(self, X):
-    # X should be a (batchsize,in_features,signal_x,signal_y) tensor
-    # Ok, this is gnarly. the contraction is M_ixa N_jyb X_mfij W_abfg.
-    # M and N are the 1d shift tensors. So M_ixa X_mfij has spatial indices x, a, for X(x ^ a, - )
-    # Similarly N_jyb X_mfij has spatial indices y, b, for X(-, y ^b).
-    # So M_ixa N_jyb X_mfij represents X(x^a,y^b). Now we take the summation over a, b with the convolution kernel.
-    # Finally, the summation over f takes the appropriate linear combination of all the convolutional kernels for this layer
-    #Y = torch.einsum("ixa,jyb,mfij,abfg->mgxy",self.conv_x,self.conv_y,X,self.weights)
     Y = oe.contract("ixa,jyb,mfij,abfg->mgxy",self.conv_x,self.conv_y,X,self.weights)
-    # Y is now (batchsize,out_features,signal_x,signal_y)
-    return Y + self.bias #this should broadcast over everything
+    return Y + self.bias
   
   def extra_repr(self):
     kernel_x, kernel_y, in_features, out_features = self.weights.shape
@@ -86,18 +78,15 @@ class JoinConv2d(nn.Module):
     nn.init.zeros_(self.bias)
     
   def forward(self, X):
-    # X should be a (batchsize,in_features,signal_x,signal_y) tensor
-    #Y = torch.einsum("ixa,jyb,mfij,abfg->mgxy",self.conv_x,self.conv_y,X,self.weights)
     Y = oe.contract("ixa,jyb,mfij,abfg->mgxy",self.conv_x,self.conv_y,X,self.weights)
-    # Y is now (batchsize,out_features,signal_x,signal_y)
-    return Y + self.bias #this should broadcast over everything
+    return Y + self.bias
   
   def extra_repr(self):
     kernel_x, kernel_y, in_features, out_features = self.weights.shape
     return 'join convolution layer with input_features={}, output_features={}, kernel_size={}'.format(in_features, out_features, (kernel_x,kernel_y))
 
 class LatticeCNN(nn.Module):
-  def __init__(self,signal_dim,kernel_dim,n_features,alpha=0.5):
+  def __init__(self,signal_dim,kernel_dim,n_features):
     super(LatticeCNN,self).__init__()
     self.meet_conv = []
     self.join_conv = []
@@ -107,7 +96,7 @@ class LatticeCNN(nn.Module):
     self.meet_conv = nn.ModuleList(self.meet_conv)
     self.join_conv = nn.ModuleList(self.join_conv)
 
-  def forward(self,x,alpha=0.5):
+  def forward(self,x):
     for (mc,jc) in zip(self.meet_conv,self.join_conv):
       x = F.leaky_relu((1-alpha)*mc(x) + alpha*jc(x))
       #x = F.max_pool2d(x,(2,2))
@@ -136,18 +125,23 @@ class LatticeCNNPool(nn.Module):
 
 
 class LatticeClassifier(nn.Module):
-  def __init__(self,signal_dim,n_features,n_classes,alpha=0.5,p_drop=0.0):
+  def __init__(self,signal_dim,conv_layers,n_classes,p_drop=0.0):
+    #e.g. conv_layers = [n_features,8,16,8,4]
     super(LatticeClassifier,self).__init__()
     self.convolutions = LatticeCNNPool(signal_dim,(4,4),[n_features,16,16,8],[(2,2),(2,2),(1,1)],alpha)
     self.convolutions.cuda()
     self.fc1 = nn.Linear(8*(signal_dim[0]//4)*(signal_dim[1]//4),32)
     self.fc2 = nn.Linear(32,32)
     self.fc3 = nn.Linear(32,n_classes)
+    self.readout = nn.Linear(8*signal_dim[0]*signal_dim[1],n_classes)
+    self.drop0 = nn.Dropout(p_drop)
     self.drop1 = nn.Dropout(p_drop)
     self.drop2 = nn.Dropout(p_drop)
 
+
   def forward(self,x):
     batch_size = x.shape[0]
+    #x = self.drop0(x)
     x = self.convolutions(x)
     x = F.relu(self.drop1(self.fc1(torch.reshape(x,(batch_size,-1))))) #get rid of middle fc layer
     #x = self.fc1(torch.reshape(x,(batch_size, -1)))
@@ -223,4 +217,5 @@ class HybridClassifier(nn.Module):
     x = F.relu(self.drop2(self.fc2(x)))
     x = self.fc3(x)
     #x = torch.sum(x,dim=(2,3)) #dumbest possible classifier
+    
     return x

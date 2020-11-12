@@ -10,8 +10,6 @@ from train import *
 from numpy.random import permutation
 from torch.utils.data import DataLoader,random_split
 import time
-from matplotlib.pyplot import figure,xlabel,ylabel,plot,savefig,legend,title
-import pickle
 
 #torch.manual_seed(11)
 
@@ -34,12 +32,12 @@ Y = torch.load('./rivet_classes.pt')
 print('data has shape: '+ str(X.shape))
 print('labels has shape: ' + str(Y.shape))
 
-#binary classification sofa vs. monitor
 n_trials = 5
 n_epochs = 200
 alpha = 0.5
 p_drop = 0.5
 learning_rate = 10e-4
+
 train_accuracy = torch.zeros(n_epochs,n_trials)
 test_accuracy = torch.zeros(n_epochs,n_trials)
 train_loss = torch.zeros(n_epochs,n_trials)
@@ -47,18 +45,22 @@ train_loss = torch.zeros(n_epochs,n_trials)
 for trial in range(n_trials):
     trial_start = time.time()
     data = [[X[index,:,:,:],Y[index]] for index in range(X.shape[0])]
-    training_data,testing_data = random_split(data,[len(data) - len(data)//10,len(data)//10],generator=torch.Generator().manual_seed(42+trial))
+    n_train = 7*len(data)//10
+    n_test = 2*len(data)//10
+    n_validate = len(data)-n_train-n_test
+    training_data,testing_data,validation_data = random_split(data,[n_train,n_test,n_validate],generator=torch.Generator().manual_seed(42+trial))
     trainloader = DataLoader(training_data,batch_size=128,shuffle=True,pin_memory=True)
     testloader = DataLoader(testing_data,batch_size=128,shuffle=False,pin_memory=True)
+    validloader = DataLoader(validation_data,batch_size=128,shuffle=False,pin_memory=True)
     print("Trial {:d}".format(trial+1))
-    model = HybridClassifier(feature_dim,n_features,n_classes,alpha=alpha,p_drop=p_drop)
+    model = LatticeClassifier(feature_dim,conv_layers,n_classes,p_drop)
     model = model.to(device)
     model.cuda()
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(),lr=learning_rate)
+    optimizer = optim.Adam(model.parameters(),lr=learning_rate,weight_decay=5e-2)
     def callback(model,epoch):
         torch.save(model.state_dict(),"./checkpoints/lattice_trial{:d}_epoch{:d}".format(trial+1,epoch+1))
-    train_accuracy[:,trial], test_accuracy[:,trial], train_loss[:,trial] = train(model, criterion, optimizer, trainloader, testloader, n_epochs, device, callback)
+    train_accuracy[:,trial], test_accuracy[:,trial], train_loss[:,trial] = train(model, criterion, optimizer, trainloader, testloader, validloader, n_epochs, device, callback)
     print("Trial took {:.1f} seconds".format(time.time() - trial_start))
 torch.save(train_accuracy,'./hybrid_train_accuracy.pt')
 torch.save(test_accuracy,'./hybrid_test_accuracy.pt')

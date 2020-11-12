@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import pickle
 
-def train(model, criterion, optimizer, train_data, test_data, n_epochs, device, callback=None):
+def train(model, criterion, optimizer, train_data, test_data, validation_data, n_epochs, device, callback=None):
     train_accuracy = torch.zeros(n_epochs)
     test_accuracy = torch.zeros(n_epochs)
     train_loss = torch.zeros(n_epochs)
@@ -13,7 +13,20 @@ def train(model, criterion, optimizer, train_data, test_data, n_epochs, device, 
         total = 0.0
         total_loss = 0.0
         correct = 0
-        model.train()
+        if (epoch % 20 == 19):
+            v_total = 0.0
+            v_correct = 0
+            model.eval()
+            with torch.no_grad():
+                for i,data in enumerate(validation_data):
+                    inputs,labels = data[0].to(device),data[1].to(device)
+                    outputs = model(inputs)
+                    _, predicted = torch.max(outputs,1)
+                    v_total += labels.size(0)
+                    v_correct += (predicted == labels).sum().item()
+                validation_accuracy = v_correct/v_total
+                print("Validation accuracy: {:.1%}".format(validation_accuracy))
+        model.train()            
         for i, data in enumerate(train_data):
             inputs, labels = data[0].to(device), data[1].to(device)
             optimizer.zero_grad()
