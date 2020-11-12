@@ -34,10 +34,10 @@ Y = torch.load('./rivet_classes.pt')
 print('data has shape: '+ str(X.shape))
 print('labels has shape: ' + str(Y.shape))
 
-n_trials = 10
-n_epochs = 150
+n_trials = 5
+n_epochs = 200
 p_drop = 0.5
-learning_rate = 2.5e-4
+learning_rate = 5e-4
 train_accuracy = torch.zeros(n_epochs,n_trials)
 test_accuracy = torch.zeros(n_epochs,n_trials)
 #ConvClassifier
