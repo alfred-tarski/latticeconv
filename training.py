@@ -35,8 +35,8 @@ print('labels has shape: ' + str(Y.shape))
 n_trials = 5
 n_epochs = 200
 alpha = 0.5
-p_drop = 0.5
-learning_rate = 10e-4
+p_drop = 0.2
+learning_rate = 5e-4
 
 train_accuracy = torch.zeros(n_epochs,n_trials)
 test_accuracy = torch.zeros(n_epochs,n_trials)
@@ -53,7 +53,7 @@ for trial in range(n_trials):
     testloader = DataLoader(testing_data,batch_size=128,shuffle=False,pin_memory=True)
     validloader = DataLoader(validation_data,batch_size=128,shuffle=False,pin_memory=True)
     print("Trial {:d}".format(trial+1))
-    model = LatticeClassifier(feature_dim,conv_layers,n_classes,p_drop)
+    model = LatticeClassifier(feature_dim,n_features,n_classes,p_drop)
     model = model.to(device)
     model.cuda()
     criterion = nn.CrossEntropyLoss()

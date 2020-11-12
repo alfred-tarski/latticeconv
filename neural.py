@@ -125,8 +125,7 @@ class LatticeCNNPool(nn.Module):
 
 
 class LatticeClassifier(nn.Module):
-  def __init__(self,signal_dim,conv_layers,n_classes,p_drop=0.0):
-    #e.g. conv_layers = [n_features,8,16,8,4]
+  def __init__(self,signal_dim,n_features,n_classes,p_drop=0.0,alpha=0.5):
     super(LatticeClassifier,self).__init__()
     self.convolutions = LatticeCNNPool(signal_dim,(4,4),[n_features,16,16,8],[(2,2),(2,2),(1,1)],alpha)
     self.convolutions.cuda()
@@ -141,10 +140,8 @@ class LatticeClassifier(nn.Module):
 
   def forward(self,x):
     batch_size = x.shape[0]
-    #x = self.drop0(x)
     x = self.convolutions(x)
-    x = F.relu(self.drop1(self.fc1(torch.reshape(x,(batch_size,-1))))) #get rid of middle fc layer
-    #x = self.fc1(torch.reshape(x,(batch_size, -1)))
+    x = F.relu(self.fc1(self.drop1(torch.reshape(x,(batch_size,-1)))))
     x = F.relu(self.drop2(self.fc2(x)))
     x = self.fc3(x)
     #x = torch.sum(x,dim=(2,3)) #dumbest possible classifier
@@ -169,7 +166,7 @@ class ConvClassifier(nn.Module):
     x = F.max_pool2d(x,(2,2))
     x = F.leaky_relu(self.convolutions[2](x)[:,:,0:40,0:40])
     #x = F.max_pool2d(x,(2,2))
-    x = F.relu(self.drop1(self.fc1(torch.reshape(x,(batch_size,-1)))))
+    x = F.relu(self.fc1(self.drop1(torch.reshape(x,(batch_size,-1)))))
     #x = self.fc1(torch.reshape(x,(batch_size, -1)))
     x = F.relu(self.drop2(self.fc2(x)))
     x = self.fc3(x)

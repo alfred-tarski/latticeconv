@@ -36,7 +36,7 @@ print('labels has shape: ' + str(Y.shape))
 
 n_trials = 5
 n_epochs = 200
-p_drop = 0.5
+p_drop = 0.2
 learning_rate = 5e-4
 train_accuracy = torch.zeros(n_epochs,n_trials)
 test_accuracy = torch.zeros(n_epochs,n_trials)
@@ -58,8 +58,8 @@ for trial in range(n_trials):
     optimizer = optim.Adam(model.parameters(),lr=learning_rate)
     def callback(model,epoch):
         torch.save(model.state_dict(),"./checkpoints/lattice_trial{:d}_epoch{:d}".format(trial+1,epoch+1))
-    train_accuracy[:,trial], test_accuracy[:,trial], train_loss[:,trail] = train(model, criterion, optimizer, trainloader, testloader, n_epochs, device, callback)
+    train_accuracy[:,trial], test_accuracy[:,trial], _ = train(model, criterion, optimizer, trainloader, testloader, n_epochs, device, callback)
     print("Trial took {:.1f} seconds".format(time.time() - trial_start))
 torch.save(train_accuracy,'./conv_train_accuracy.pt')
 torch.save(test_accuracy,'./conv_test_accuracy.pt')
-torch.save(train_loss,'./conv_train_loss.pt')
+#torch.save(train_loss,'./conv_train_loss.pt')
